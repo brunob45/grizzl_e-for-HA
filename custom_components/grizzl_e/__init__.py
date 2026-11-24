@@ -14,7 +14,7 @@ from .device import GrizzleEDevice
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["sensor", "binary_sensor"]
+PLATFORMS = ["sensor", "binary_sensor", "switch", "number"]
 
 async def async_setup(hass: HomeAssistant, config: dict):
     """Set up the Grizzl-E component."""
@@ -62,7 +62,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     )
     
     # Create device
-    device = GrizzleEDevice(coordinator, entry)
+    device = GrizzleEDevice(coordinator, entry, session, timeout)
     
     # Store in hass.data
     hass.data.setdefault(DOMAIN, {})
