@@ -1,16 +1,22 @@
 """Device class for Grizzl-E EV Charger."""
+import aiohttp
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN, MANUFACTURER, MODEL
 
 class GrizzleEDevice:
     """Grizzl-E device."""
 
-    def __init__(self, coordinator: DataUpdateCoordinator, entry):
+    def __init__(self, coordinator: DataUpdateCoordinator, entry, session, timeout):
         """Initialize the device."""
         self.coordinator = coordinator
         self.entry = entry
+
+        # HTTP client
+        self.session = session
+        self.timeout = timeout
+
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -37,3 +43,23 @@ class GrizzleEDevice:
             serial_number=serial,
             configuration_url=f"http://{self.entry.data['host']}",
         )
+
+    async def async_page_event(self, data: str):
+        """Send update."""
+        host = self.entry.data["host"]
+        username = self.entry.data["username"]
+        password = self.entry.data["password"]
+
+        url = f"http://{host}/pageEvent"
+        try:
+            async with self.session.post(
+                url,
+                auth=aiohttp.BasicAuth(username, password),
+                timeout=self.timeout,
+                data=data,
+            ) as resp:
+                if resp.status != 200:
+                    raise UpdateFailed(f"Bad status {resp.status}")
+                return
+        except Exception as err:
+            raise UpdateFailed(f"Error sending Grizzl-E page event: {err}")
