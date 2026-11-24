@@ -5,10 +5,12 @@ The cloud keeps charging schedules and electricity rate zones in the station's
 One switch is created per entry, and switches are added and removed as
 schedules are created or deleted (from Home Assistant or the app).
 """
-from homeassistant.components.switch import SwitchEntity
+from typing import Any
+from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .cloud import GrizzleECloudEntity, is_cloud_entry
 from .const import DOMAIN, WEEKDAYS
@@ -21,8 +23,24 @@ def station_zones(station):
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    if not is_cloud_entry(entry) or entry.entry_id not in hass.data.get(DOMAIN, {}):
+    if entry.entry_id not in hass.data.get(DOMAIN, {}):
         return
+
+    if not is_cloud_entry(entry):
+        device = hass.data[DOMAIN][entry.entry_id]["device"]
+        coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+
+        # Set device info on coordinator for binary sensors to access
+        coordinator.device = device
+
+        # Ensure we have fresh data
+        if coordinator.data is None:
+            await coordinator.async_config_entry_first_refresh()
+
+        if all([key in coordinator.data for key in ["evseEnabled"]]):
+            async_add_entities([GrizzleEEnableSwitch(coordinator)])
+        return
+
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     known = set()
 
@@ -137,3 +155,46 @@ def _day_names(days):
 
 def _hhmm(hours, minutes):
     return f"{int(hours or 0):02d}:{int(minutes or 0):02d}"
+
+
+class GrizzleEEnableSwitch(CoordinatorEntity, SwitchEntity):
+    """Enable switch for Grizzl-E charger."""
+
+    """https://contributors.home-assistant.io/core/entities/switch/"""
+
+    _attr_has_entity_name = True
+    _attr_device_class = SwitchDeviceClass.SWITCH
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return the device info."""
+        return self.coordinator.device.device_info
+
+    def __init__(self, coordinator):
+        super().__init__(coordinator)
+        self._attr_name = "EVSE Enabled"
+        self._key = "evseEnabled"
+        self._attr_unique_id = f"{self.coordinator.config_entry.entry_id}_evseEnabled"
+
+    @property
+    def is_on(self):
+        if not self.coordinator.data:
+            return None
+        val = self.coordinator.data.get(self._key)
+        if isinstance(val, (int, float)):
+            return val == 0  # 1 means off
+        return bool(val)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn the outlet on."""
+        device = self.coordinator.device
+        await device.async_page_event("evseEnabled=0")  # 0 means on
+        self.coordinator.data[self._key] = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn the outlet off."""
+        device = self.coordinator.device
+        await device.async_page_event("evseEnabled=1")  # 1 means off
+        self.coordinator.data[self._key] = False
+        self.async_write_ha_state()
