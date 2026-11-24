@@ -80,6 +80,6 @@ class GrizzlESetCurrent(CoordinatorEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Set the maximum charge current."""
         device = self.coordinator.device
-        await device.async_page_event(f"currentSet={int(value)}")
+        await device.async_page_event(f"{self._key}={int(value)}")
         self.coordinator.data[self._key] = value
         self.async_write_ha_state()

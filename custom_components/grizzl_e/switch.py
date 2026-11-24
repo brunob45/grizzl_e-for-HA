@@ -56,20 +56,18 @@ class GrizzleEEnableSwitch(CoordinatorEntity, SwitchEntity):
         if not self.coordinator.data:
             return None
         val = self.coordinator.data.get(self._key)
-        if isinstance(val, (int, float)):
-            return val == 0  # 1 means off
-        return bool(val)
+        return val == 0  # 1 means off
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the outlet on."""
         device = self.coordinator.device
-        await device.async_page_event("evseEnabled=0")  # 0 means on
-        self.coordinator.data[self._key] = True
+        await device.async_page_event(f"{self._key}=0")  # 0 means on
+        self.coordinator.data[self._key] = 0
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the outlet off."""
         device = self.coordinator.device
-        await device.async_page_event("evseEnabled=1")  # 1 means off
-        self.coordinator.data[self._key] = False
+        await device.async_page_event(f"{self._key}=1")  # 1 means off
+        self.coordinator.data[self._key] = 1
         self.async_write_ha_state()
